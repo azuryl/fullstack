@@ -1,0 +1,83 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from sklearn import cross_validation
+from sklearn import metrics
+from sklearn import preprocessing
+import tensorflow as tf
+from tensorflow.contrib import learn
+
+import sys
+import numpy as np
+import pandas
+from ml_common import *
+
+CSV_FILE_PATH = '''./test.csv'''
+if len(sys.argv) > 1:
+    CSV_FILE_PATH = sys.argv[1]
+
+CSV_FILE_FORMAT = {
+    'zipcode': str, 
+    'longitude': np.float32, 
+    'latitude': np.float32,
+    'is_for_sale': bool,
+    'property_type': str,
+    'bedroom': np.float32,
+    'bathroom': np.float32,
+    'size': np.float32,
+    'list_price': np.float32,
+    'last_update': np.float32
+}
+
+UCOLUMNS = ['zipcode', 'property_type', 'bedroom', 'bathroom', 'size', 'list_price']
+PRICE_COLUMN = 'list_price'
+
+MODEL_OUTPUT_DIR = "./DNNmodel/"
+
+# Set the output display to have one digit for decimal places, for display readability only.
+pandas.options.display.float_format = '{:.1f}'.format
+
+# Load in the data from CSV files.
+property_dataframe = pandas.read_csv(CSV_FILE_PATH, dtype=CSV_FILE_FORMAT)
+
+
+# Pick out the columns we care about.
+property_dataframe = property_dataframe[COLUMNS]
+
+
+# Clean up data
+property_dataframe = property_dataframe[property_dataframe['is_for_sale'] == True]
+property_dataframe = property_dataframe[property_dataframe['list_price'] != 0]
+# Drop rows with any value NaN
+property_dataframe = property_dataframe.dropna()
+
+
+ 
+x, y = property_dataframe[UCOLUMNS], property_dataframe[PRICE_COLUMN]
+
+  # Split dataset into train / test
+x_train, x_test, y_train, y_test = cross_validation.train_test_split(
+      x, y, test_size=0.2, random_state=42)
+
+  # Scale data (training set) to 0 mean and unit standard deviation.
+  #scaler = preprocessing.StandardScaler()
+  #x_train = scaler.fit_transform(x_train)
+
+  # Build 2 layer fully connected DNN with 10, 10 units respectively.feature_columns = learn.infer_real_valued_columns_from_input(x_train)
+feature_columns = [zipcode, property_type, bedroom, bathroom, size_buckets]
+regressor = learn.DNNRegressor(
+      feature_columns=feature_columns, hidden_units=[10, 10])
+
+  # Fit
+regressor.fit(x_train, y_train, steps=5000, batch_size=1)
+
+  # Predict and score
+y_predicted = list(
+    regressor.predict(scaler.transform(x_test), as_iterable=True))
+score = metrics.mean_squared_error(y_predicted, y_test)
+
+print('MSE: {0:f}'.format(score))
+
+
+#if __name__ == '__main__':
+#  tf.app.run()

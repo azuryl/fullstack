@@ -1,0 +1,116 @@
+from __future__ import absolute_import
+from __future__ import division
+#from __future__ import print_function
+from sklearn import cross_validation
+from sklearn import metrics
+from sklearn import preprocessing
+import tensorflow as tf
+from tensorflow.contrib import learn
+
+import sys
+import numpy as np
+import pandas as pd
+from ml_common import *
+from IPython import display
+
+
+CSV_FILE_PATH = '''./test.csv'''
+if len(sys.argv) > 1:
+    CSV_FILE_PATH = sys.argv[1]
+
+CSV_FILE_FORMAT = {
+    'zipcode': str, 
+    'longitude': np.float32, 
+    'latitude': np.float32,
+    'is_for_sale': bool,
+    'property_type': str,
+    'bedroom': np.float32,
+    'bathroom': np.float32,
+    'size': np.float32,
+    'list_price': np.float32,
+    'last_update': np.float32
+}
+
+UCOLUMNS = ['bedroom', 'bathroom', 'size']
+PRICE_COLUMN = ['list_price']
+
+#DNN_MODEL_OUTPUT_DIR = "./DNNmodel/"
+RED_MODEL_OUTPUT_DIR = "./RDNNmodel/"
+
+# Set the output display to have one digit for decimal places, for display readability only.
+pandas.options.display.float_format = '{:.1f}'.format
+
+# Load in the data from CSV files.
+property_dataframe = pandas.read_csv(CSV_FILE_PATH, dtype=CSV_FILE_FORMAT)
+#print property_dataframe.head(10)
+# Randomize the index.
+property_dataframe = property_dataframe.reindex(
+   np.random.permutation(property_dataframe.index))
+
+# Pick out the columns we care about.
+property_dataframe = property_dataframe[COLUMNS]
+
+
+# Clean up data
+property_dataframe = property_dataframe[property_dataframe['is_for_sale'] == True]
+property_dataframe = property_dataframe[property_dataframe['list_price'] != 0]
+property_dataframe = property_dataframe[property_dataframe['size'] != 0]
+# Drop rows with any value NaN
+property_dataframe = property_dataframe.dropna()
+ 
+x = property_dataframe[UCOLUMNS]
+y = property_dataframe[PRICE_COLUMN]
+#print x.head(10)
+print x.head(20)
+x_train, x_test, y_train, y_test = cross_validation.train_test_split(
+      x, y, test_size=0.2, random_state=42)
+#print x_train.head(20)
+#print x_train.head(10).dtype
+  # Scale data (training set) to 0 mean and unit standard deviation.
+  #scaler = preprocessing.StandardScaler()
+  #x_train = scaler.fit_transform(x_train)
+
+
+  # Build 2 layer fully connected DNN with 10, 10 units respectively.feature_columns = learn.infer_real_valued_columns_from_input(x_train)
+feature_columns = [bedroom, bathroom, size_buckets]
+#regressor = learn.DNNRegressor(
+ #    feature_columns=feature_columns, hidden_units=[10, 10],model_dir=DNN_MODEL_OUTPUT_DIR)
+estimator =learn.DNNRegressor(
+    feature_columns=feature_columns,
+    hidden_units=[10,10],
+    optimizer=tf.train.ProximalAdagradOptimizer(
+      learning_rate=0.1,
+      l1_regularization_strength=0.001),
+      model_dir=RED_MODEL_OUTPUT_DIR
+    )
+ # Fit
+#feature = input_x_fn(x_train)
+#target = input_y_fn(y_train)
+
+def input_fn_train():
+    return input_xy_fn(x_train, y_train)
+
+print "fit..........."
+estimator.fit(input_fn=input_fn_train,steps=1000)
+
+  # Predict and score
+def input_fn_test():
+    return input_xy_fn(x_test.head(2),y_test.head(2))
+
+
+print estimator.evaluate(input_fn=input_fn_test, steps=100)
+print "Evaluation done!"
+
+
+#print "predit........"
+#y_predicted = list(
+#    estimator.predict(x_test, as_iterable=True))
+#print y_predicted
+#print "score...."
+#score = metrics.mean_squared_error(y_predicted, y_test)
+
+#print('MSE: {0:f}'.format(score))
+
+
+#if __name__ == '__main__':
+#  tf.app.run()
